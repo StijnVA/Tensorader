@@ -29,19 +29,36 @@ class Network:
 
         x1 = tf.layers.dense(
              self.wallet,
-             units=50,
+             units=5,
              activation=tf.nn.relu,
              kernel_initializer=tf.contrib.layers.xavier_initializer())
         
         x2 = tf.layers.dense(
              self.history,
-             units=50,
+             units=500,
+             activation=tf.nn.relu,
+             kernel_initializer=tf.contrib.layers.xavier_initializer())
+
+        x2a = tf.layers.dense(
+             x2,
+             units=300,
+             activation=tf.nn.relu,
+             kernel_initializer=tf.contrib.layers.xavier_initializer())
+
+        x2b = tf.layers.dense(
+             x2a,
+             units=100,
+             activation=tf.nn.relu,
+             kernel_initializer=tf.contrib.layers.xavier_initializer())
+
+        x2c = tf.layers.dense(
+             x2b,
+             units=5,
              activation=tf.nn.relu,
              kernel_initializer=tf.contrib.layers.xavier_initializer())
 
         h = tf.layers.dense(
-            #tf.concat([x1, x2],0),
-            x1,
+            tf.concat([x1, x2c],1),
             units=100,
             activation=tf.nn.sigmoid,
             kernel_initializer=tf.contrib.layers.xavier_initializer())
