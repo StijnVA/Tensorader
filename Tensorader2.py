@@ -12,10 +12,10 @@ from policy_network import Network
 directory = 'C:\\Conyza\\orderbookdata\\data\\'
 #sample_size = 10000
 #sample_size = 100
-sample_size = 20
+sample_size = 100
 #batch_size = 25
 #batch_size = 100
-batch_size = 5
+batch_size = 1
 
 history_size = 50
 orderbook_size = 20
@@ -24,7 +24,10 @@ ACTION_NONE = 0
 ACTION_SELL = 1
 ACTION_BUY = 2
 NumberOfActions = 3
-WRONG_ACTION_REWARD = 0
+#WRONG_ACTION_REWARD = 0
+WRONG_ACTION_REWARD = 0.01
+#WRONG_ACTION_REWARD = -1
+
 #TransactionCost = 0.05
 TransactionCost = -0.10
 
@@ -85,6 +88,26 @@ def doAction(btc, euro, action, bids, asks):
     euro = (math.floor(euro * 100)) / 100.0
     return btc, euro, price
 
+def getActionFromPropability(propabilities):
+    if np.random.uniform() < propabilities[0]:
+        action = ACTION_BUY
+    elif np.random.uniform() < propabilities[1]:
+        action = ACTION_SELL
+    else:
+        action = ACTION_NONE
+    return action
+
+def preproces(batch_state_action_reward_tuples):
+    wallet, history, actions, rewards, prices = zip(*batch_state_action_reward_tuples)
+    lastPrice = prices[-1]
+    walletValue = wallet[0] + lastPrice * wallet[1]
+    reward = walletValue / 100
+
+    rewards = [reward for r in rewards]
+    
+    return list(zip(wallet, history, actions, rewards))
+
+
 network = Network(50, 0.03, numberOfActions=3,  checkpoints_dir='checkpoints')
 
 with tf.Session() as sess:
@@ -112,59 +135,47 @@ with tf.Session() as sess:
             history = np.array(history) #todo: 50x5 instead of 250 flat
             
             propabilitieMatrix = network.forward_pass(wallet, history)
-            print('Propabilitie Matrix', len(propabilitieMatrix), 'x', len(propabilitieMatrix[0]))
+            # print('Propabilitie Matrix', len(propabilitieMatrix), 'x', len(propabilitieMatrix[0]))
             propabilities = propabilitieMatrix[0]
 
-            #print(propabilities, sample_data)
-            if np.random.uniform() < propabilities[0]:
-                action = ACTION_BUY
-            elif np.random.uniform() < propabilities[1]:
-                action = ACTION_SELL
-            else:
-                action = ACTION_NONE
+            action = getActionFromPropability(propabilities)
             
             btc_new, euro_new, price = doAction(btc, euro, action, bids, asks)
             
-            ticks += 1
-            if action == ACTION_NONE :
-                reward = 'none'
-            elif action == ACTION_BUY :
-                if euro == 0 :
-                    reward = WRONG_ACTION_REWARD
-                else :
-                    reward = 'buy'
-                    lastposition = euro
-            elif action == ACTION_SELL : 
-                if btc == 0 :
-                   reward = WRONG_ACTION_REWARD
-                else :
-                    reward = euro_new / lastposition
-                    # reward = (euro_new / lastposition) -1
-                    # reward = (euro_new - lastposition) / 100
-                    wallet2, history2, actions2, rewards2 = zip(*batch_state_action_reward_tuples)
-                    # rewards2 = [reward if (x == 'buy') else reward if(x == 'none') else x for x in rewards2]
-                    rewards2 = [reward if (x == 'buy') else 0 if(x == 'none') else x for x in rewards2]
-                    batch_state_action_reward_tuples = list(zip(wallet2, history2, actions2, rewards2))
+            #if action == ACTION_NONE :
+            #    reward = 'none'
+            #elif action == ACTION_BUY :
+            #    if euro == 0 :
+            #        reward = WRONG_ACTION_REWARD
+            #    else :
+            #        reward = 'buy'
+            #        lastposition = euro
+            #elif action == ACTION_SELL : 
+            #    if btc == 0 :
+            #       reward = WRONG_ACTION_REWARD
+            #    else :
+            #        reward = euro_new / lastposition
+            #        # reward = (euro_new / lastposition) -1
+            #        # reward = (euro_new - lastposition) / 100
+            #        wallet2, history2, actions2, rewards2 = zip(*batch_state_action_reward_tuples)
+            #        # rewards2 = [reward if (x == 'buy') else reward if(x == 'none') else x for x in rewards2]
+            #        rewards2 = [reward if (x == 'buy') else reward if(x == 'none') else x for x in rewards2]
+            #        batch_state_action_reward_tuples = list(zip(wallet2, history2, actions2, rewards2))
 
-            tup = (wallet, history, [1 if action == ACTION_BUY else 0, 1 if action == ACTION_SELL else 0, 1 if action == ACTION_NONE else 0], reward)
+            #tup = (wallet, history, [1 if action == ACTION_BUY else 0, 1 if action == ACTION_SELL else 0, 1 if action == ACTION_NONE else 0], reward)
+            
+            tup = (wallet, history, action, 0, price)
             batch_state_action_reward_tuples.append(tup)
                     
             btc = btc_new
             euro = euro_new
    
         if i % batch_size == 0 :
-            
-            wallet, history, actions, rewards = zip(*batch_state_action_reward_tuples)
-
-            rewards = [1 if (x == 'buy') else -1 if (x == 'none') else x for x in rewards]
-            # rewards = [(r-1) * 100 for r in rewards]
-
-            print(np.average(rewards))
-            print(rewards)
-            print(actions)
-            batch_state_action_reward_tuples = list(zip(wallet, history, actions, rewards))
+            batch_state_action_reward_tuples = preproces(batch_state_action_reward_tuples)
             network.train(batch_state_action_reward_tuples)
+            
             batch_state_action_reward_tuples = []
+            lastposition = 0
 
             tf.train.Saver().save(sess, './savepoints/AlphaA-1.ckpt')
 
