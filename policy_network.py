@@ -59,7 +59,9 @@ class Network:
 
         h = tf.layers.dense(
             tf.concat([x1, x2c],1),
-            units=100,
+            #x1,
+            units=2,
+            #units=100,
             activation=tf.nn.sigmoid,
             kernel_initializer=tf.contrib.layers.xavier_initializer())
 
@@ -80,15 +82,15 @@ class Network:
         # 'advantage', which is the reward for each action in each round.
         # Positive reward pushes the log probability of chosen action up;
         # negative reward pushes the log probability of the chosen action down.
-        self.loss = - tf.losses.log_loss(
+        self.loss = tf.losses.log_loss(
             labels=self.sampled_actions,
             predictions=self.up_probability,
-            weights=-self.advantage,
-            reduction=tf.losses.Reduction.SUM_BY_NONZERO_WEIGHTS
+            weights=self.advantage
+            # reduction=tf.losses.Reduction.SUM
             )
 
-        # optimizer = tf.train.AdamOptimizer(self.learning_rate)
-        optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
+        optimizer = tf.train.AdamOptimizer(self.learning_rate)
+        # optimizer = tf.train.GradientDescentOptimizer(self.learning_rate)
         
         self.train_op = optimizer.minimize(self.loss)
 
@@ -103,8 +105,10 @@ class Network:
         summary_loss = tf.summary.scalar("loss", self.loss)
         stats_advantage = tf.reduce_mean(self.advantage)
         summary_reward = tf.summary.scalar("reward", stats_advantage)
+        stats_wallet = tf.reduce_max(self.wallet, 0)[0]
+        summary_wallet = tf.summary.scalar("wallet", stats_wallet)
 
-        self.summaries = tf.summary.merge([summary_loss, summary_reward])
+        self.summaries = tf.summary.merge([summary_loss, summary_reward, summary_wallet])
 
         datetime = str(math.trunc(time.time()))
         self.summarywriter = tf.summary.FileWriter("log/" + datetime + "-training") 
